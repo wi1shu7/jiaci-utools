@@ -1,0 +1,20 @@
+{
+  "main": "index.html",
+  "preload": "preload.js",
+  "logo": "logo.png",
+  "pluginSetting": {
+    "height": 600
+  },
+  "features": [
+    { "code": "study", "description": "打开 AI 加词，学习今日单词", "cmds": ["AI加词", "加词学习"] },
+    { "code": "boss", "description": "隐藏或唤回加词学习小窗", "mainHide": true, "cmds": ["加词老板键"] },
+    { "code": "answer", "description": "显示当前单词的答案", "mainHide": true, "cmds": ["加词显示答案"] },
+    { "code": "know", "description": "把当前单词标为认识", "mainHide": true, "cmds": ["加词认识"] },
+    { "code": "fuzzy", "description": "把当前单词标为模糊", "mainHide": true, "cmds": ["加词模糊"] },
+    { "code": "master", "description": "把当前单词标为已掌握", "mainHide": true, "cmds": ["加词已掌握"] },
+    { "code": "reset", "description": "把当前单词加入重新记", "mainHide": true, "cmds": ["加词重新记"] },
+    { "code": "generate", "description": "生成或重新解析当前单词的 AI 资料", "mainHide": true, "cmds": ["加词生成AI资料"] },
+    { "code": "details", "description": "打开或收起当前单词的资料", "mainHide": true, "cmds": ["加词词条资料"] },
+    { "code": "speak", "description": "朗读当前单词", "mainHide": true, "cmds": ["加词发音"] }
+  ]
+}
