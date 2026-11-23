@@ -122,7 +122,7 @@ export function StudyCard({ state, send, compact = false }) {
                 </div>
                 {detail && detailError && <p className="mt-1 text-xs text-muted-foreground" role="status">{detailError}</p>}
                 <CollapsibleContent className="word-details">
-                  {detail && <WordDetails detail={detail} sound={sound} speak={(sentence) => send("speak", sentence)} />}
+                  {detail && <WordDetails detail={detail} sound={sound} speakerSide={state.settings?.exSpeaker} speak={(sentence) => send("speak", sentence)} />}
                 </CollapsibleContent>
               </Collapsible>
             ) : (

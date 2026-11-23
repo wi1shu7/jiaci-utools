@@ -2,7 +2,7 @@ import { Book, BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-function BookGroup({ title, books, bookId, busy, onSelect, showTitle = true }) {
+function BookGroup({ title, books, bookId, selectedBookId, busy, onSelect, showTitle = true }) {
   return (
     <section className="book-group" aria-label={title}>
       {showTitle && <h2>{title}</h2>}
@@ -12,7 +12,7 @@ function BookGroup({ title, books, bookId, busy, onSelect, showTitle = true }) {
             <li key={book.id}>
               <Button
                 type="button" variant="ghost" className="book-item"
-                aria-pressed={book.id === bookId} disabled={Boolean(busy)}
+                aria-current={book.id === selectedBookId ? "page" : undefined} disabled={Boolean(busy)}
                 title={`${book.name} · ${book.wordCount.toLocaleString()} 词`}
                 onClick={() => onSelect(book.id)}
               >
@@ -27,11 +27,11 @@ function BookGroup({ title, books, bookId, busy, onSelect, showTitle = true }) {
   )
 }
 
-export function BookLibrary({ state, scope, setScope, onSelect }) {
+export function BookLibrary({ state, scope, setScope, selectedBookId, onSelect }) {
   const current = state.books.filter((book) => book.id === state.bookId)
   const mine = state.books.filter((book) => book.type !== "builtin" && book.id !== state.bookId)
   const other = state.books.filter((book) => book.type === "builtin")
-  const shared = { bookId: state.bookId, busy: state.busy, onSelect }
+  const shared = { bookId: state.bookId, selectedBookId, busy: state.busy, onSelect }
 
   return (
     <Tabs value={scope} onValueChange={setScope} className="book-library" data-book-library>

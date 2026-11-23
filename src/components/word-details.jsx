@@ -32,7 +32,7 @@ function ExampleLine({ example }) {
   )
 }
 
-export function WordDetails({ detail, sound, speak }) {
+export function WordDetails({ detail, sound, speakerSide = "right", speak }) {
   const { view, categories, note, limited } = detail
   const sections = [
     {
@@ -57,7 +57,7 @@ export function WordDetails({ detail, sound, speak }) {
       fromAi: true,
       entries: view.examples,
       render: (example) => (
-        <div className="example">
+        <div className="example" data-speaker-side={speakerSide}>
           <div><Gloss english={example.en} translation={example.zh} /></div>
           {sound && <IconButton label={`朗读例句 ${example.en}`} onClick={() => speak(example.en)}><Volume2 /></IconButton>}
         </div>

@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
-const hostFiles = ["plugin.json", "preload.js", "float-preload.js", "api.js", "study.js", "logo.png"]
+const hostFiles = ["plugin.json", "preload.js", "float-preload.js", "api.js", "study.js", "pronunciation.js", "logo.png"]
 const pages = ["index.html", "float.html"]
 
 export default defineConfig({

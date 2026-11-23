@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { ipcRenderer } = require("electron");
 const { localToday, normalizeHost } = require("./api");
+const { playPronunciation } = require("./pronunciation");
 const { RATINGS, Study } = require("./study");
 const manifest = require("./plugin.json");
 
@@ -68,9 +69,11 @@ let floatWindow = null;
 let floatReady = false;
 let floatWanted = false;
 let windowError = "";
-let audioEpoch = 0;
-let audio = null;
-let lastItem = null;
+let mainActive = false;
+let mainStudyVisible = false;
+let playback = null;
+let spokenItem = null;
+let spokenFace = "";
 const study = new Study(saved, publish, save);
 
 function snapshot() {
@@ -99,23 +102,25 @@ function refreshFloatVisibility() {
     floatWanted = false;
   }
   if (wasVisible && !floatWanted) {
-    stopAudio();
+    stopAudio("study");
     publish();
   }
 }
 
 function publish() {
-  if (lastItem !== study.item) {
-    lastItem = study.item;
-    stopAudio();
-  }
   const win = liveFloat();
   if (floatWanted && (!study.api || study.user?.termsOutdated)) setFloatVisible(false);
+  if (!study.api || study.user?.termsOutdated) stopAudio();
+  updateStudyAudio();
   const state = snapshot();
   for (const listener of subscribers) listener(state);
   if (floatReady && win) {
-    const { host, user, books, otp, ...cardState } = state;
-    win.webContents.send("jiaci:state", { ...cardState, user: user && { termsOutdated: user.termsOutdated } });
+    const { host, user, settings, books, otp, ...cardState } = state;
+    win.webContents.send("jiaci:state", {
+      ...cardState,
+      user: user && { termsOutdated: user.termsOutdated },
+      settings: settings && { exSpeaker: settings.exSpeaker },
+    });
   }
 }
 
@@ -138,7 +143,7 @@ function setFloatVisible(show) {
   floatWanted = show;
   if (!show) {
     floatWindow?.hide();
-    stopAudio();
+    stopAudio("study");
     return;
   }
   if (floatWindow) {
@@ -212,41 +217,67 @@ function setKey({ code, key }) {
   return true;
 }
 
-function stopAudio() {
-  audioEpoch += 1;
-  if (audio) {
-    audio.pause();
-    audio = null;
-  }
-  window.speechSynthesis?.cancel();
+function stopAudio(scope) {
+  if (!playback || (scope && playback.scope !== scope)) return;
+  playback.controller.abort();
+  playback = null;
 }
 
-async function pronounce(sentence) {
-  const item = study.item;
-  if (!item || !preferences.sound) return;
-  const asSentence = typeof sentence === "string";
-  const text = asSentence ? sentence : item.spelling;
-  if (asSentence && !item.examples?.includes(text) && !study.detail?.view.examples?.some((example) => example.en === text)) return;
+async function playClips(scope, clips) {
+  if (!preferences.sound || !study.user || study.user.termsOutdated || !clips.length) return;
   stopAudio();
-  const epoch = audioEpoch;
-  let usedFallback = false;
-  function fallback() {
-    if (usedFallback || epoch !== audioEpoch || !window.speechSynthesis) return;
-    usedFallback = true;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = study.user?.settings?.accent === "uk" ? "en-GB" : "en-US";
-    window.speechSynthesis.speak(utterance);
+  const controller = new AbortController();
+  playback = { controller, scope };
+  const { signal } = controller;
+  const settings = study.user.settings ?? {};
+  for (const [kind, text] of clips) {
+    if (signal.aborted) break;
+    const bytes = await study.pronunciation(kind, text).catch(() => null);
+    if (!await playPronunciation(bytes, text, settings, signal).catch(() => false)) break;
   }
-  try {
-    const bytes = await study.pronunciation(asSentence ? "sentence" : "word", text);
-    if (epoch !== audioEpoch) return;
-    if (!bytes) return fallback();
-    audio = new Audio(`data:audio/mpeg;base64,${bytes.toString("base64")}`);
-    audio.addEventListener("error", fallback, { once: true });
-    await audio.play();
-  } catch {
-    fallback();
+  if (playback?.controller === controller) playback = null;
+}
+
+function wordClips(spelling, firstExample) {
+  return firstExample ? [["word", spelling], ["sentence", firstExample]] : [["word", spelling]];
+}
+
+function updateStudyAudio() {
+  const visible = (mainActive && mainStudyVisible) || (floatWanted && floatReady);
+  const item = visible ? study.item : null;
+  let face = "";
+  if (item) face = !study.answered ? "front" : study.detail ? "answer" : "loading";
+  if (item === spokenItem && face === spokenFace) return;
+  spokenItem = item;
+  spokenFace = face;
+  stopAudio("study");
+  const settings = study.user?.settings;
+  if (face === "front" && settings?.autoPlay) {
+    void playClips("study", wordClips(item.spelling));
+  } else if (face === "answer" && settings?.autoReadDetail) {
+    void playClips("study", wordClips(item.spelling, study.detail.view.examples?.[0]?.en));
   }
+}
+
+function pronounce(sentence) {
+  const item = study.item;
+  if (!item) return;
+  if (typeof sentence !== "string") return playClips("study", wordClips(item.spelling));
+  if (item.examples?.includes(sentence) || study.detail?.view.examples?.some((example) => example.en === sentence)) {
+    return playClips("study", [["sentence", sentence]]);
+  }
+}
+
+function pronounceInBook({ spelling, sentence, automatic } = {}) {
+  if (!mainActive || (automatic && !study.user?.settings?.autoReadDetail)) return;
+  const clips = [];
+  if (typeof spelling === "string" && spelling.length <= 60 && /^[a-z][a-z'.-]*( [a-z'.-]+)*$/i.test(spelling)) {
+    clips.push(["word", spelling]);
+  }
+  if (typeof sentence === "string" && sentence.trim() && sentence.length <= 2_000) {
+    clips.push(["sentence", sentence]);
+  }
+  return playClips("browse", clips);
 }
 
 const learningActions = {
@@ -270,6 +301,15 @@ const mainActions = {
   logout: () => study.logout(),
   acceptTerms: () => study.acceptTerms(),
   book: (bookId) => study.switchBook(bookId),
+  bookWords: (query) => study.bookWords(query),
+  bookWord: (query) => study.bookWord(query),
+  saveSettings: (patch) => study.saveSettings(patch),
+  browseAudio: (options) => pronounceInBook(options),
+  stopBrowseAudio: () => stopAudio("browse"),
+  studyVisible: (visible) => {
+    mainStudyVisible = visible === true;
+    updateStudyAudio();
+  },
   toggleFloat,
   preferences: (changes) => changePreferences(changes),
   resetKeys: () => changePreferences({ keys: defaults }),
@@ -307,17 +347,23 @@ utools.onPluginEnter(({ code, from }) => {
     if (liveFloat() && floatWanted) runLearning(code);
     if (from !== "hotkey") utools.hideMainWindow();
   } else {
+    mainActive = true;
     utools.subInputBlur();
     refreshFloatVisibility();
+    updateStudyAudio();
     syncIfNeeded();
   }
 });
 
 utools.onPluginOut((killed) => {
+  mainActive = false;
   if (killed) {
     stopAudio();
     liveFloat()?.close();
+    return;
   }
+  stopAudio("browse");
+  updateStudyAudio();
 });
 
 window.jiaci = {

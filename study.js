@@ -3,6 +3,7 @@ const { clearTimeout, setTimeout } = require("node:timers");
 const { JiaciApi, localToday } = require("./api");
 
 const RATINGS = { know: "认识", fuzzy: "模糊", master: "已掌握", reset: "重新记" };
+const PLAN_SETTINGS = ["newWords", "reviewLimit", "order", "newOrder"];
 const POLL_MS = 3_000;
 const POLL_LIMIT_MS = 15 * 60_000;
 
@@ -58,6 +59,7 @@ class Study {
     return {
       host: this.host, mode: this.mode, hasSession: Boolean(this.api?.session),
       user: this.user && { email: this.user.email, termsOutdated: this.user.termsOutdated },
+      settings: this.user?.settings ?? null,
       accent: this.user?.settings?.accent === "uk" ? "uk" : "us",
       books: this.books, bookId: this.bookId, loaded: this.loaded, date: this.date,
       item: this.item, total: this.total, done: this.done,
@@ -188,7 +190,8 @@ class Study {
   }
 
   async switchBook(bookId) {
-    if (!this.user || this.user.termsOutdated || bookId === this.bookId || !this.books.some((book) => book.id === bookId)) return;
+    if (!this.user || this.user.termsOutdated || !this.books.some((book) => book.id === bookId)) return false;
+    if (bookId === this.bookId) return true;
     await this.run("book", async () => {
       const api = this.api;
       await api.request("/api/wordbooks/current", { method: "PUT", json: { wordbookId: bookId } });
@@ -197,9 +200,60 @@ class Study {
       this.rememberCard();
       await this.loadQueue();
     });
+    return this.loaded && this.bookId === bookId;
   }
 
-  async loadQueue() {
+  async saveSettings(patch) {
+    if (!this.user || this.user.termsOutdated || this.busy) return null;
+    let saved = false;
+    await this.run("settings", async () => {
+      const api = this.api;
+      const previous = this.user.settings;
+      const settings = await api.request("/api/settings", { method: "PUT", json: patch });
+      if (api !== this.api) return;
+      this.user = { ...this.user, settings };
+      saved = true;
+      if (PLAN_SETTINGS.some((key) => settings[key] !== previous?.[key])) {
+        try {
+          await this.loadQueue({ restoreCard: false });
+        } catch (error) {
+          if (error.status === 401) throw error;
+          this.notice = `设置已保存，队列刷新失败。${error.message}`;
+          return;
+        }
+      }
+      this.notice = "设置已保存";
+    });
+    return { saved, message: this.notice };
+  }
+
+  async readBook(route) {
+    const api = this.api;
+    if (!api || !this.user || this.user.termsOutdated) throw new Error("请登录并确认服务条款");
+    try {
+      const data = await api.request(route);
+      if (api !== this.api) throw new Error("登录会话已变更");
+      return data;
+    } catch (error) {
+      if (error.status === 401 && api === this.api) {
+        this.clearSession("登录已过期，请重新登录");
+        this.publish();
+      }
+      throw error;
+    }
+  }
+
+  bookWords({ bookId, status, q, sort, cursor, limit }) {
+    const search = new URLSearchParams({ status, q, sort, cursor, limit });
+    return this.readBook(`/api/wordbooks/${encodeURIComponent(bookId)}/words?${search}`);
+  }
+
+  bookWord({ bookId, spelling }) {
+    const search = new URLSearchParams({ book: bookId, date: localToday() });
+    return this.readBook(`/api/words/${encodeURIComponent(spelling)}?${search}`);
+  }
+
+  async loadQueue({ restoreCard = true } = {}) {
     const api = this.api;
     const localDay = localToday();
     const [books, queue] = await Promise.all([
@@ -207,7 +261,7 @@ class Study {
       api.request(`/api/study/today?date=${localDay}`),
     ]);
     if (api !== this.api) return;
-    const savedCard = this.checkpoint;
+    const savedCard = restoreCard ? this.checkpoint : null;
     this.clearQueue();
     this.books = books.wordbooks;
     this.bookId = queue.bookId;

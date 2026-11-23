@@ -121,6 +121,8 @@
 .toolbar button:is(:hover, [aria-expanded="true"]) { color: var(--foreground); }
 .toolbar button[data-active="true"] { background: var(--selection); color: var(--selection-foreground); }
 .toolbar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
+.toolbar-title > button { max-width: 100%; color: var(--foreground); }
+.toolbar-title span { overflow: hidden; text-overflow: ellipsis; }
 .wordmark { gap: 8px; padding-left: 5px; font-size: 13px; font-weight: 650; white-space: nowrap; }
 .wordmark svg { width: 16px; height: 16px; color: var(--muted-foreground); }
 .study-progress { gap: 8px; margin-right: 6px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; font-size: 11px; white-space: nowrap; }
@@ -213,9 +215,9 @@
 .book-group + .book-group { margin-top: 18px; }
 .book-group ul { display: grid; gap: 2px; }
 .book-item { width: 100%; height: 32px; justify-content: start; gap: 8px; padding-inline: 8px; text-align: left; }
-.book-item[aria-pressed="true"] { background: var(--selection); color: var(--selection-foreground); }
+.book-item[aria-current="page"] { background: var(--selection); color: var(--selection-foreground); }
 .book-item svg { color: var(--muted-foreground); }
-.book-item[aria-pressed="true"] svg { color: inherit; }
+.book-item[aria-current="page"] svg { color: inherit; }
 .book-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 .library-drawer {
   inset: 0 auto 0 0;
@@ -233,6 +235,60 @@
 .library-drawer > header { flex: none; padding: 8px 12px 2px 17px; }
 .library-drawer h2[data-slot="dialog-title"] { font-size: 14px; }
 .library-drawer .book-library { flex: 1; height: auto; padding-top: 0; }
+
+.book-words { flex: 1; min-width: 0; overflow: auto; scrollbar-width: thin; }
+.book-words-inner { width: min(100% - 32px, 660px); margin-inline: auto; padding-block: 22px 12px; }
+.book-words-header, .book-word-tools, .book-word-pager, .book-word-dialog-header, .book-word-meta, .book-word-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.book-words-header, .book-word-dialog-header { justify-content: space-between; }
+.book-words-header h2 { font-size: 21px; font-weight: 630; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.book-words-header p, .book-list-message, .book-word-pager { font-size: 12px; color: var(--muted-foreground); }
+.book-words-header p { margin-top: 3px; }
+.book-words-header > button { flex: none; }
+.book-status-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-block: 16px 10px; }
+.book-status-filters button { height: 28px; gap: 5px; padding-inline: 7px; color: var(--muted-foreground); font-size: 12px; }
+.book-status-filters button[aria-pressed="true"] { background: var(--selection); color: var(--selection-foreground); }
+.book-status-filters span { font-variant-numeric: tabular-nums; font-size: 11px; }
+.book-word-tools { margin-bottom: 12px; }
+.book-search { position: relative; display: block; width: 100%; max-width: 310px; min-width: 0; }
+.book-search svg { position: absolute; inset: 9px auto auto 9px; width: 14px; height: 14px; color: var(--muted-foreground); pointer-events: none; }
+.book-search input { padding-inline-start: 29px; font-size: 12px; }
+.book-word-tools > button { flex: none; }
+.book-word-list { list-style: none; border-block: 1px solid var(--border); }
+.book-word-row { display: flex; align-items: center; min-width: 0; }
+.book-word-row + .book-word-row { border-top: 1px solid var(--border); }
+.book-word-row > button:not(.book-word-link) { flex: none; color: var(--muted-foreground); }
+.book-word-link { height: 38px; flex: 1; min-width: 0; justify-content: start; gap: 8px; padding-inline: 8px; }
+.book-word-name { flex: 1; min-width: 0; overflow: hidden; text-align: start; text-overflow: ellipsis; font-size: 14px; }
+.book-word-link > svg, .book-word-link time { color: var(--muted-foreground); }
+.book-word-link time { font-size: 11px; font-variant-numeric: tabular-nums; }
+.word-status { flex: none; font-size: 11px; font-weight: 500; color: var(--muted-foreground); }
+.word-status[data-status="new"] { color: var(--destructive); }
+.word-status[data-status="learning"] { color: #87540e; }
+.word-status[data-status="mastered"] { color: #286e4b; }
+:root[data-theme="dark"] .word-status[data-status="learning"] { color: #edb775; }
+:root[data-theme="dark"] .word-status[data-status="mastered"] { color: #83d4a9; }
+.book-list-message { padding-block: 14px; }
+.book-word-pager { position: sticky; bottom: 0; justify-content: end; background: var(--background); padding-block: 5px; }
+.book-word-pager span { margin-inline-end: auto; font-variant-numeric: tabular-nums; }
+.book-word-dialog {
+  width: min(520px, 100% - 32px);
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  gap: 8px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.book-word-dialog-header h2 { font-size: 25px; font-weight: 630; overflow-wrap: anywhere; }
+.book-word-meta { color: var(--muted-foreground); }
+.book-word-meta .ai-badge { margin-inline-start: 5px; }
+.book-word-dialog .definition { margin-top: 3px; }
+.book-word-dialog .word-details:not(:empty) { margin-top: 5px; }
 
 .study-card { --reading-width: 520px; --reading-gutter: clamp(22px, 4.4vw, 42px); }
 .card-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
@@ -322,6 +378,8 @@
 .detail-section strong { font-weight: 550; }
 .detail-section .part-of-speech { font-size: 12px; }
 .detail-section .example { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.detail-section .example > div { flex: 1; min-width: 0; }
+.detail-section .example[data-speaker-side="left"] { flex-direction: row-reverse; }
 .translation, .sense > span { display: block; }
 .translation { margin-top: 3px; }
 .translation, .part-of-speech { color: var(--muted-foreground); }
@@ -331,6 +389,8 @@
 .settings-section + .settings-section { margin-top: 20px; }
 .settings-section h2 { font-size: 13px; font-weight: 650; margin-bottom: 5px; }
 .settings-surface { min-width: 0; }
+.settings-save-row { display: flex; justify-content: space-between; align-items: start; gap: 10px; margin-top: 10px; }
+.settings-save-row button { flex: none; }
 .setting-row, .dimension-row {
   display: flex;
   min-height: 44px;

@@ -91,7 +91,7 @@ function ThemeControl({ value, onChange, label }) {
 }
 
 function GeneralSettings({ state, send }) {
-  const { alwaysOnTop, sound, colors, opacity, scale, width, height, mainTheme, floatTheme, transparentBackground } = state.preferences
+  const { alwaysOnTop, colors, opacity, scale, width, height, mainTheme, floatTheme, transparentBackground } = state.preferences
   const change = (name, value) => send("preferences", { [name]: value })
   return (
     <>
@@ -101,10 +101,6 @@ function GeneralSettings({ state, send }) {
           <div className="setting-row">
             <span>明暗模式</span>
             <ThemeControl label="主界面明暗模式" value={mainTheme} onChange={(value) => change("mainTheme", value)} />
-          </div>
-          <div className="setting-row">
-            <Label htmlFor="sound">插件内发音</Label>
-            <Switch id="sound" checked={sound} onCheckedChange={(value) => change("sound", value)} />
           </div>
         </div>
       </section>
@@ -160,6 +156,101 @@ function GeneralSettings({ state, send }) {
         </div>
       </section>
     </>
+  )
+}
+
+function Choice({ label, value, options, onChange }) {
+  return (
+    <div className="setting-row">
+      <span>{label}</span>
+      <div className="theme-control" role="group" aria-label={label}>
+        {options.map(([key, name]) => (
+          <Button key={key} type="button" variant="ghost" size="sm" aria-pressed={value === key} onClick={() => onChange(key)}>
+            {name}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AccountSettings({ state, send, plan = false }) {
+  const { settings, busy } = state
+  const [draft, setDraft] = useState({})
+  const [message, setMessage] = useState("")
+  const value = { ...settings, ...draft }
+  const patch = Object.fromEntries(Object.entries(draft).filter(([key, next]) => next !== settings?.[key]))
+  const change = (key, next) => {
+    setDraft((current) => ({ ...current, [key]: next }))
+    setMessage("")
+  }
+  const submit = async (event) => {
+    event.preventDefault()
+    if (busy || !Object.keys(patch).length) return
+    const result = await send("saveSettings", patch)
+    if (result?.saved) setDraft({})
+    setMessage(result?.message ?? "")
+  }
+  const choice = (key, label, options) => (
+    <Choice label={label} value={value[key]} options={options} onChange={(next) => change(key, next)} />
+  )
+
+  return (
+    <div className="settings-surface">
+      {!plan && (
+        <div className="setting-row">
+          <Label htmlFor="sound">插件内发音</Label>
+          <Switch id="sound" checked={state.preferences.sound} onCheckedChange={(sound) => send("preferences", { sound })} />
+        </div>
+      )}
+      {settings && !state.user?.termsOutdated ? (
+        <form className="settings-surface" onSubmit={submit}>
+          <fieldset disabled={Boolean(busy)} className="settings-surface">
+            {plan ? (
+              <>
+                {[["newWords", "每日新词量", 5, 200], ["reviewLimit", "每日复习上限", 20, 1000]].map(([key, label, min, max]) => (
+                  <div className="setting-row" key={key}>
+                    <Label htmlFor={key}>{label}</Label>
+                    <Input
+                      id={key} className="h-8 w-20 tabular-nums" type="number" min={min} max={max} step={1} required
+                      value={value[key] ?? ""} onChange={(event) => change(key, event.target.value === "" ? "" : event.target.valueAsNumber)}
+                    />
+                  </div>
+                ))}
+                {choice("order", "学习顺序", [["review-first", "先复习后新词"], ["mixed", "混合"]])}
+                {choice("newOrder", "新词顺序", [["book", "词库顺序"], ["random", "随机"]])}
+                <SettingsNotes title="学习计划配置说明">
+                  <p>每日新词量为 5–200，复习上限为 20–1000。超出的到期词顺延到次日。保存后按新设置刷新今日队列。</p>
+                </SettingsNotes>
+              </>
+            ) : (
+              <>
+                {choice("accent", "口音", [["us", "美音"], ["uk", "英音"]])}
+                {choice("voice", "声音", [["female", "女声"], ["male", "男声"]])}
+                {choice("exSpeaker", "例句喇叭位置", [["right", "右侧"], ["left", "左侧"]])}
+                {[["autoPlay", "翻到卡片时自动发音"], ["autoReadDetail", "进入单词详情自动朗读"]].map(([key, label]) => (
+                  <div className="setting-row" key={key}>
+                    <Label htmlFor={key}>{label}</Label>
+                    <Switch id={key} checked={value[key] === true} onCheckedChange={(next) => change(key, next)} />
+                  </div>
+                ))}
+                <SettingsNotes title="发音配置说明">
+                  <p>插件内发音是本机总开关。口音、声音与自动朗读设置保存在账户中。显示答案或打开词库里的词条时，自动朗读会依次播放单词和第一条例句。</p>
+                </SettingsNotes>
+              </>
+            )}
+          </fieldset>
+          <div className="settings-save-row">
+            <Notice message={message} />
+            <Button type="submit" size="sm" disabled={Boolean(busy) || !Object.keys(patch).length}>
+              {busy === "settings" ? "保存中…" : "保存"}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <p className="py-3 text-sm text-muted-foreground">{state.user?.termsOutdated ? "请先确认服务条款。" : "登录后可编辑账户设置。"}</p>
+      )}
+    </div>
   )
 }
 
@@ -265,9 +356,13 @@ export function Settings({ state, bridge, headingRef }) {
       <Tabs defaultValue="general" className="settings-tabs">
         <TabsList variant="line" aria-label="设置分类">
           <TabsTrigger value="general">通用</TabsTrigger>
+          <TabsTrigger value="plan">学习计划</TabsTrigger>
+          <TabsTrigger value="audio">发音</TabsTrigger>
           <TabsTrigger value="keys">快捷键</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings state={state} send={bridge.action} /></TabsContent>
+        <TabsContent value="plan"><AccountSettings state={state} send={bridge.action} plan /></TabsContent>
+        <TabsContent value="audio"><AccountSettings state={state} send={bridge.action} /></TabsContent>
         <TabsContent value="keys"><KeySettings state={state} bridge={bridge} /></TabsContent>
       </Tabs>
     </section>
