@@ -11,9 +11,10 @@ function rateMessage(result, response) {
   if (response.skipped === "stale") return "其他设备已有较新的评分，本次未改变复习安排";
   if (response.skipped === "removed") return "该词已移出学习";
   if (response.skipped === "mastered") return "该词已掌握";
+  if (response.skipped === "pending") return "重学安排已更新";
   if (result === "master" || response.nextInterval === -1) return "已标记为已掌握";
-  if (result === "reset") return "已加入重新记";
-  if (response.requeueToday) return "今日稍后再次出现";
+  if (result === "reset") return "已重新记，稍后重新学习";
+  if (response.requeueToday) return "已加入短期重学";
   return `下次复习在 ${response.nextInterval} 天后`;
 }
 
@@ -81,6 +82,7 @@ class Study {
 
   clearQueue() {
     this.items = [];
+    this.pendingRelearn = [];
     this.bookId = null;
     this.date = "";
     this.localDay = "";
@@ -88,6 +90,14 @@ class Study {
     this.total = 0;
     this.done = 0;
     this.clearCard();
+  }
+
+  setItems(items, now = Date.now()) {
+    const dueTime = (item) => Date.parse(item.dueAt ?? "") || 0;
+    const relearn = items.filter((item) => item.kind === "relearn").sort((left, right) => dueTime(left) - dueTime(right));
+    this.items = [...relearn.filter((item) => dueTime(item) <= now), ...items.filter((item) => item.kind !== "relearn")];
+    this.pendingRelearn = relearn.filter((item) => dueTime(item) > now);
+    if (!this.items.length) this.items = this.pendingRelearn.splice(0, 1);
   }
 
   clearSession(notice) {
@@ -267,11 +277,11 @@ class Study {
     this.bookId = queue.bookId;
     this.date = queue.today;
     this.localDay = localDay;
-    this.items = queue.items;
+    this.setItems(queue.items);
     this.total = queue.items.length;
     this.loaded = true;
     if (savedCard && savedCard.date === this.date && savedCard.bookId === this.bookId) {
-      const index = this.items.findIndex((item) => item.wordId === savedCard.wordId);
+      const index = this.items.findIndex((item) => item.wordId === savedCard.wordId && (item.dueAt ?? null) === (savedCard.dueAt ?? null));
       if (index >= 0) {
         this.items.unshift(...this.items.splice(index, 1));
         this.answered = Boolean(savedCard.answered);
@@ -285,7 +295,7 @@ class Study {
   rememberCard() {
     this.checkpoint = this.item ? {
       date: this.date, bookId: this.bookId, wordId: this.item.wordId,
-      answered: this.answered, detailsOpen: this.detailsOpen,
+      dueAt: this.item.dueAt ?? null, answered: this.answered, detailsOpen: this.detailsOpen,
     } : null;
     this.save({ checkpoint: this.checkpoint });
   }
@@ -361,7 +371,7 @@ class Study {
     const item = this.item;
     const payload = this.pendingRate ?? {
       wordId: item.wordId, result, clientTs: `${randomUUID()}-${Date.now()}`,
-      date: this.date, wordbookId: this.bookId ?? undefined, source: "study",
+      date: this.date, wordbookId: this.bookId ?? undefined, source: "study", cardDueAt: item.dueAt ?? undefined,
     };
     await this.run("rate", async () => {
       const api = this.api;
@@ -369,9 +379,13 @@ class Study {
       try {
         const response = await api.request("/api/study/rate", { method: "POST", json: payload });
         if (api !== this.api) return;
-        this.items.shift();
-        if (response.requeueToday) this.items.push({ ...item, kind: result === "reset" ? "new" : item.kind });
-        else this.done += 1;
+        const remaining = [...this.items.slice(1), ...this.pendingRelearn];
+        if (response.requeueToday) {
+          const dueAt = response.progress?.dueAt ?? null;
+          const kind = dueAt ? "relearn" : result === "reset" ? "new" : item.kind;
+          remaining.push({ ...item, kind, dueAt });
+        } else this.done += 1;
+        this.setItems(remaining);
         this.clearCard();
         this.rememberCard();
         this.notice = rateMessage(result, response);
