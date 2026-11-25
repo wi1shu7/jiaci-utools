@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { AiBadge, IconButton, Notice } from "@/components/controls"
-import { WordDetails } from "@/components/word-details"
+import { CoreDefinition, WordDetails } from "@/components/word-details"
 
 const PAGE_SIZE = 50
 const statuses = { all: "全部", new: "未开始", learning: "学习中", mastered: "已掌握", none: "未加入" }
@@ -71,7 +71,7 @@ function BookWordDialog({ bookId, word, state, send, restoreFocus }) {
           }}>重试</Button>
         </div>
       )}
-      {view?.core && <p className="definition">{view.coreFromAi && <AiBadge />}{view.core}</p>}
+      {view?.core && <p className="definition"><CoreDefinition view={view} /></p>}
       {detail && (
         <div className="word-details">
           <WordDetails detail={detail} sound={sound} speakerSide={state.settings?.exSpeaker} speak={(sentence) => send("browseAudio", { sentence })} />

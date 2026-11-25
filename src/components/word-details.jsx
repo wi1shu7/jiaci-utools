@@ -32,6 +32,20 @@ function ExampleLine({ example }) {
   )
 }
 
+export function CoreDefinition({ view }) {
+  const { core, coreFromAi, meanings, meaningsSource } = view
+  const pos = meaningsSource === (coreFromAi ? "ai" : "dict") ? meanings?.[0]?.pos?.trim() : ""
+  const definition = pos && core.startsWith(`${pos} `) ? core.slice(pos.length + 1) : core
+
+  return (
+    <>
+      {pos && <><span className="part-of-speech" lang="en">{pos}</span>{" "}</>}
+      {coreFromAi && <><AiBadge />{" "}</>}
+      {definition}
+    </>
+  )
+}
+
 export function WordDetails({ detail, sound, speakerSide = "right", speak }) {
   const { view, categories, note, limited } = detail
   const sections = [

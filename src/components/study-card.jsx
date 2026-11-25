@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Kbd } from "@/components/ui/kbd"
 import { AiBadge, IconButton, Notice } from "@/components/controls"
-import { WordDetails } from "@/components/word-details"
+import { CoreDefinition, WordDetails } from "@/components/word-details"
 import { actions, keyLabel } from "@/lib/jiaci"
 
 const ratings = ["know", "fuzzy", "master", "reset"]
@@ -86,8 +86,7 @@ export function StudyCard({ state, send, compact = false }) {
             {answered ? (
               <Collapsible open={detailsOpen} onOpenChange={() => send("details")}>
                 <p className="definition" role="status">
-                  {view?.core && view.coreFromAi === true && <AiBadge />}
-                  {detail ? view.core || "暂无释义" : detailError || "正在加载释义…"}
+                  {view?.core ? <CoreDefinition view={view} /> : detail ? "暂无释义" : detailError || "正在加载释义…"}
                 </p>
                 <div className="answer-tools">
                   <CollapsibleTrigger asChild>
